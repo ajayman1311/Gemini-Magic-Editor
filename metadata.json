@@ -1,5 +1,5 @@
 {
-  "name": "GOOGLE AI EDITOR",
+  "name": "AI Editor",
   "description": "An all-in-one image editing application powered by the Gemini API. Features include background removal, photo combination, background and cloth changing, view alteration, and a magic editor for custom modifications.",
   "requestFramePermissions": []
 }

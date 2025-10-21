@@ -1,6 +1,6 @@
 import React from 'react';
 
-const DownloadIcon: React.FC<{ className?: string }> = ({ className }) => (
+const UploadIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
@@ -9,7 +9,7 @@ const DownloadIcon: React.FC<{ className?: string }> = ({ className }) => (
   >
     <path
       fillRule="evenodd"
-      d="M12 2.25a.75.75 0 01.75.75v6.94l1.97-1.97a.75.75 0 111.06 1.06l-3.25 3.25a.75.75 0 01-1.06 0L8.22 8.03a.75.75 0 111.06-1.06l1.97 1.97V3a.75.75 0 01.75-.75z"
+      d="M11.25 10.5V18a.75.75 0 001.5 0v-7.5l1.06 1.06a.75.75 0 001.06-1.06l-2.25-2.25a.75.75 0 00-1.06 0l-2.25 2.25a.75.75 0 001.06 1.06l1.06-1.06z"
       clipRule="evenodd"
     />
     <path d="M5.625 15a3.75 3.75 0 106.341 2.275.75.75 0 00-1.013-1.105 2.25 2.25 0 11-4.04-1.923.75.75 0 00-1.288-.65A3.75 3.75 0 005.625 15z" />
@@ -17,4 +17,4 @@ const DownloadIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
-export default DownloadIcon;
+export default UploadIcon;

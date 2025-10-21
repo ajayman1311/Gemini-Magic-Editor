@@ -11,13 +11,22 @@ export interface ImageFilters {
   grayscale: number;
   invert: number;
   exposure: number;
-  highlights: number;
-  shadows: number;
+  whitePoint: number;
+  blackPoint: number;
+  saturation: number;
+  warmth: number;
+  tint: number;
+  vignette: number;
+  vintage: number;
+  west: number;
+  palma: number;
 }
 
 export interface ImageState {
   imageData: ImageData | null;
   filters: ImageFilters;
+  rotation: number;
+  straightenAngle: number;
 }
 
 export interface AiTool {
@@ -25,4 +34,16 @@ export interface AiTool {
   name: string;
   defaultPrompt: string;
   imageInputs: 1 | 2;
+}
+
+export interface ApiFilterAction {
+    id: string;
+    name: string;
+    prompt: string;
+}
+
+export interface ApiAdjustmentAction {
+    id: string;
+    name: string;
+    prompt: string;
 }
