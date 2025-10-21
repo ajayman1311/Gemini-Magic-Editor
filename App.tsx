@@ -4,7 +4,7 @@ import { TOOLS } from './constants';
 import { editImage } from './services/geminiService';
 import ImageUploader from './components/ImageUploader';
 import Loader from './components/Loader';
-import SparklesIcon from './components/icons/SparklesIcon';
+import MagicEditorIcon from './components/icons/MagicEditorIcon';
 
 const Header: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => (
   <header className="bg-gray-900/80 backdrop-blur-sm fixed top-0 left-0 right-0 z-30 border-b border-gray-700">
@@ -173,7 +173,7 @@ const App: React.FC = () => {
                     )}
                     {!resultImage && !isLoading && !error && (
                         <div className="text-center text-gray-500">
-                            <SparklesIcon className="w-16 h-16 mx-auto mb-4"/>
+                            <MagicEditorIcon className="w-16 h-16 mx-auto mb-4"/>
                             <h3 className="text-xl font-semibold">Your masterpiece will appear here</h3>
                             <p>Upload image(s) and provide instructions to get started.</p>
                         </div>
