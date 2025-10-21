@@ -623,7 +623,7 @@ const App: React.FC = () => {
     <div className="bg-gray-900 text-gray-100 flex flex-col lg:flex-row h-screen font-sans antialiased">
       {isLoading && <Loader />}
 
-      <aside className="basis-[30%] lg:basis-auto w-full lg:w-96 bg-gray-800 flex flex-col shadow-2xl flex-shrink-0 order-last lg:order-first">
+      <aside className="basis-2/5 lg:basis-auto w-full lg:w-96 bg-gray-800 flex flex-col shadow-2xl flex-shrink-0 order-last lg:order-first min-h-0">
         <div className="p-4 border-b border-gray-700">
           <h1 className="text-2xl font-bold text-center flex items-center justify-center">
             <GoogleGIcon className="w-8 h-8 mr-2" />
@@ -660,7 +660,7 @@ const App: React.FC = () => {
         )}
       </aside>
 
-      <main className="basis-[70%] lg:basis-auto flex-1 flex items-center justify-center p-4 lg:p-8 overflow-hidden bg-black/20">
+      <main className="basis-3/5 lg:basis-auto flex-1 flex items-center justify-center p-4 lg:p-8 overflow-hidden bg-black/20">
         {error && (
           <div className="absolute top-4 right-4 bg-red-600 text-white p-3 rounded-md shadow-lg z-50 animate-pulse">
             {error}
