@@ -54,10 +54,10 @@ export const TOOLS: ToolConfig[] = [
     name: 'Photo Combiner',
     description: 'Merge two photos into a single masterpiece.',
     icon: CombineIcon,
-    promptPrefix: 'combine these images to',
+    promptPrefix: 'Combine the following images. It is critically important to preserve the exact facial features and identity of any people shown. With that in mind, ',
     imageInputs: 2,
     promptLabel: 'Combination Instructions',
-    promptPlaceholder: 'e.g., show the cat riding the skateboard'
+    promptPlaceholder: 'e.g., place the person from the first image into the background of the second image'
   },
   {
     id: Tool.VIEW_CHANGER,
