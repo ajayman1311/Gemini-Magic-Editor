@@ -1,4 +1,3 @@
-// Fix: Creates the main application component, orchestrating UI, state, and AI features.
 import React, {
   useState,
   useCallback,
@@ -632,14 +631,16 @@ const App: React.FC = () => {
             </span>
           </h1>
         </div>
-        {imageData && (
-          <div className="flex border-b border-gray-700">
-            <TabButton tab="ai" icon={MagicEditorIcon} label="AI Edits" />
-            <TabButton tab="filters" icon={FilterIcon} label="Filters" />
-            <TabButton tab="crop" icon={CropIcon} label="Crop" />
-          </div>
-        )}
-        <div className="flex-grow overflow-y-auto">{renderSidebarContent()}</div>
+        <div className="flex-grow overflow-y-auto">
+          {imageData && (
+            <div className="flex border-b border-gray-700">
+              <TabButton tab="ai" icon={MagicEditorIcon} label="AI Edits" />
+              <TabButton tab="filters" icon={FilterIcon} label="Filters" />
+              <TabButton tab="crop" icon={CropIcon} label="Crop" />
+            </div>
+          )}
+          {renderSidebarContent()}
+        </div>
         {imageData && (
           <div className="p-2 border-t border-gray-700 flex items-center justify-center space-x-2">
             <button
