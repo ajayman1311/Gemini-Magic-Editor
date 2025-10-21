@@ -172,6 +172,7 @@ const App: React.FC = () => {
   const [aspect, setAspect] = useState<number | undefined>();
   const [selectedAiTool, setSelectedAiTool] = useState<AiTool | null>(null);
   const [secondaryImage, setSecondaryImage] = useState<ImageData | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const secondaryImageInputRef = useRef<HTMLInputElement>(null);
 
@@ -558,6 +559,8 @@ const App: React.FC = () => {
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
+                onFocus={() => setIsTyping(true)}
+                onBlur={() => setIsTyping(false)}
                 placeholder="Select a tool or describe your edit..."
                 className="w-full h-24 p-2 bg-gray-900 border border-gray-600 rounded-md text-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition"
                 disabled={!selectedAiTool}
@@ -623,7 +626,7 @@ const App: React.FC = () => {
       {isLoading && <Loader />}
 
       <aside className="basis-2/5 lg:basis-auto w-full lg:w-96 bg-gray-800 flex flex-col shadow-2xl flex-shrink-0 order-last lg:order-first min-h-0">
-        <div className="p-4 border-b border-gray-700">
+        <div className={`p-4 border-b border-gray-700 ${isTyping ? 'hidden lg:block' : ''}`}>
           <h1 className="text-2xl font-bold text-center flex items-center justify-center">
             <GoogleGIcon className="w-8 h-8 mr-2" />
             <span className="bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
@@ -642,7 +645,7 @@ const App: React.FC = () => {
           {renderSidebarContent()}
         </div>
         {imageData && (
-          <div className="p-2 border-t border-gray-700 flex items-center justify-center space-x-2">
+          <div className={`p-2 border-t border-gray-700 flex items-center justify-center space-x-2 ${isTyping ? 'hidden lg:flex' : ''}`}>
             <button
               onClick={undo}
               disabled={!canUndo || isLoading}
