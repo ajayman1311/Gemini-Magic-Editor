@@ -1,72 +1,22 @@
+// Fix: Provides constant data for AI modes and initial filter values.
+import { ImageFilters, AiTool } from './types';
 
-import React from 'react';
-import { Tool, ToolConfig } from './types';
-import BackgroundRemoverIcon from './components/icons/BackgroundRemoverIcon';
-import PhotoCombinerIcon from './components/icons/PhotoCombinerIcon';
-import BackgroundChangerIcon from './components/icons/BackgroundChangerIcon';
-import ClothChangerIcon from './components/icons/ClothChangerIcon';
-import ViewChangerIcon from './components/icons/ViewChangerIcon';
-import MagicEditorIcon from './components/icons/MagicEditorIcon';
-
-export const TOOLS: ToolConfig[] = [
-  {
-    id: Tool.BACKGROUND_REMOVER,
-    name: 'Background Remover',
-    description: 'Remove the background from any image.',
-    icon: BackgroundRemoverIcon,
-    promptPrefix: 'remove the background',
-    imageInputs: 1,
-    promptLabel: 'Instructions (optional)',
-    promptPlaceholder: 'e.g., keep the shadow'
-  },
-  {
-    id: Tool.BACKGROUND_CHANGER,
-    name: 'Background Changer',
-    description: 'Replace the background with a new scene.',
-    icon: BackgroundChangerIcon,
-    promptPrefix: 'change the background to',
-    imageInputs: 1,
-    promptLabel: 'New Background Description',
-    promptPlaceholder: 'e.g., a futuristic city at night'
-  },
-  {
-    id: Tool.CLOTH_CHANGER,
-    name: 'Cloth Changer',
-    description: 'Magically change the outfit in a photo.',
-    icon: ClothChangerIcon,
-    promptPrefix: 'change the clothes to',
-    imageInputs: 1,
-    promptLabel: 'New Outfit Description',
-    promptPlaceholder: 'e.g., a formal black suit'
-  },
-  {
-    id: Tool.MAGIC_EDITOR,
-    name: 'Magic Editor',
-    description: 'Use a prompt to make any edit you can imagine.',
-    icon: MagicEditorIcon,
-    promptPrefix: '',
-    imageInputs: 1,
-    promptLabel: 'Editing Instructions',
-    promptPlaceholder: 'e.g., make the cat wear a wizard hat'
-  },
-  {
-    id: Tool.PHOTO_COMBINER,
-    name: 'Photo Combiner',
-    description: 'Merge two photos into a single masterpiece.',
-    icon: PhotoCombinerIcon,
-    promptPrefix: 'Combine the following images. It is critically important to preserve the exact facial features and identity of any people shown. With that in mind, ',
-    imageInputs: 2,
-    promptLabel: 'Combination Instructions',
-    promptPlaceholder: 'e.g., place the person from the first image into the background of the second image'
-  },
-  {
-    id: Tool.VIEW_CHANGER,
-    name: 'View Changer',
-    description: 'Alter the perspective or angle of your photo.',
-    icon: ViewChangerIcon,
-    promptPrefix: 'change the view to',
-    imageInputs: 1,
-    promptLabel: 'New View Description',
-    promptPlaceholder: 'e.g., a low-angle shot'
-  },
+export const EDIT_MODES: AiTool[] = [
+    { id: 'magic-editor', name: 'Magic Editor', defaultPrompt: 'Enhance this image to look more professional and vibrant.', imageInputs: 1 },
+    { id: 'background-remover', name: 'Remove BG', defaultPrompt: 'Remove the background from this image, keeping the main subject.', imageInputs: 1 },
+    { id: 'background-changer', name: 'Change BG', defaultPrompt: 'Change the background of this image to a beautiful mountain landscape at sunset.', imageInputs: 1 },
+    { id: 'cloth-changer', name: 'Change Clothes', defaultPrompt: 'Change the shirt in this image to a blue polo shirt.', imageInputs: 1 },
+    { id: 'view-changer', name: 'Change View', defaultPrompt: 'Alter the perspective of this image to a low-angle shot.', imageInputs: 1 },
+    { id: 'photo-combiner', name: 'Combine', defaultPrompt: 'Combine the main subject from the first image with the second image, blending them seamlessly.', imageInputs: 2 },
 ];
+
+export const INITIAL_FILTERS: ImageFilters = {
+    brightness: 100,
+    contrast: 100,
+    sepia: 0,
+    grayscale: 0,
+    invert: 0,
+    exposure: 100,
+    highlights: 0,
+    shadows: 0,
+};

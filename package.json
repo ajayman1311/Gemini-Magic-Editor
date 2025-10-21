@@ -1,5 +1,5 @@
 {
-  "name": "gemini-magic-image-editor",
+  "name": "google-ai-editor",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,9 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/genai": "^1.25.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "@google/genai": "^1.25.0"
+    "react-image-crop": "^11.0.9"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

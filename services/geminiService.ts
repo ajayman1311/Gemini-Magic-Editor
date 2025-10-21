@@ -1,12 +1,6 @@
-
 import { GoogleGenAI, Modality } from "@google/genai";
 import { ImageData } from '../types';
 
-if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable is not set.");
-}
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const model = 'gemini-2.5-flash-image';
 
 const fileToGenerativePart = (imageData: ImageData) => {
@@ -21,7 +15,13 @@ const fileToGenerativePart = (imageData: ImageData) => {
 export const editImage = async (
     images: ImageData[],
     prompt: string
-): Promise<string> => {
+// Fix: Changed return type to Promise<ImageData> for better type safety.
+): Promise<ImageData> => {
+    if (!process.env.API_KEY) {
+        return Promise.reject(new Error("API_KEY is not configured. Please set it up to use AI features."));
+    }
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
     try {
         const imageParts = images.map(fileToGenerativePart);
         const textPart = { text: prompt };
@@ -38,7 +38,11 @@ export const editImage = async (
         
         for (const part of response.candidates[0].content.parts) {
             if (part.inlineData) {
-                return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+                // Fix: Return an ImageData object instead of a data URL string.
+                return {
+                    base64: part.inlineData.data,
+                    mimeType: part.inlineData.mimeType,
+                };
             }
         }
         
