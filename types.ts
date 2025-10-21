@@ -1,3 +1,4 @@
+import type { ComponentType } from 'react';
 
 export enum Tool {
   BACKGROUND_REMOVER = 'BACKGROUND_REMOVER',
@@ -18,7 +19,8 @@ export interface ToolConfig {
   id: Tool;
   name: string;
   description: string;
-  icon: React.ComponentType<{ className?: string }>;
+  // FIX: Use `ComponentType` and import it as a type from React to resolve the namespace error.
+  icon: ComponentType<{ className?: string }>;
   promptPrefix: string;
   imageInputs: number;
   promptLabel: string;

@@ -1,10 +1,8 @@
-
 import React, { useState, useRef, useCallback } from 'react';
-import { ImageData } from '../types';
 
 interface ImageUploaderProps {
   id: string;
-  onImageUpload: (imageData: ImageData | null) => void;
+  onImageUpload: (id: string, imageData: { base64: string, mimeType: string } | null) => void;
   title?: string;
 }
 
@@ -31,10 +29,10 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ id, onImageUpload, title 
       try {
         const { base64, mimeType } = await fileToBase64(file);
         setImagePreview(URL.createObjectURL(file));
-        onImageUpload({ id, base64, mimeType });
+        onImageUpload(id, { base64, mimeType });
       } catch (error) {
         console.error("Error converting file to base64:", error);
-        onImageUpload(null);
+        onImageUpload(id, null);
         setImagePreview(null);
       }
     }
@@ -47,7 +45,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ id, onImageUpload, title 
   const handleRemoveImage = (e: React.MouseEvent) => {
     e.stopPropagation();
     setImagePreview(null);
-    onImageUpload(null);
+    onImageUpload(id, null);
     if(fileInputRef.current) {
         fileInputRef.current.value = "";
     }
