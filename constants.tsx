@@ -3,11 +3,11 @@ import { ImageFilters, AiTool, ApiFilterAction, ApiAdjustmentAction } from './ty
 
 export const EDIT_MODES: AiTool[] = [
     { id: 'magic-editor', name: 'Magic Editor', defaultPrompt: 'Enhance this image to look more professional and vibrant.', imageInputs: 1 },
-    { id: 'background-remover', name: 'Remove BG', defaultPrompt: 'Remove the background from this image, keeping the main subject.', imageInputs: 1 },
+    { id: 'background-remover', name: 'Remove BG', defaultPrompt: 'The background will be removed automatically. Custom prompts are not used for this tool.', imageInputs: 1 },
     { id: 'background-changer', name: 'Change BG', defaultPrompt: 'Change the background of this image to a beautiful mountain landscape at sunset.', imageInputs: 1 },
     { id: 'cloth-changer', name: 'Change Clothes', defaultPrompt: 'Change the shirt in this image to a blue polo shirt.', imageInputs: 1 },
     { id: 'view-changer', name: 'Change View', defaultPrompt: 'Alter the perspective of this image to a low-angle shot.', imageInputs: 1 },
-    { id: 'photo-combiner', name: 'Combine', defaultPrompt: 'Combine the main subject from the first image with the second image, blending them seamlessly.', imageInputs: 2 },
+    { id: 'photo-combiner', name: 'Remix', defaultPrompt: 'Create a new, photorealistic image that creatively combines the main subjects and styles of both images. The result should be a completely new scene that harmoniously integrates elements from each input.', imageInputs: 2 },
 ];
 
 export const API_FILTERS: ApiFilterAction[] = [

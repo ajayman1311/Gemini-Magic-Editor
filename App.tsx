@@ -1,3 +1,4 @@
+
 import React, {
   useState,
   useCallback,
@@ -18,12 +19,13 @@ import ImageUploader from './components/ImageUploader';
 import Loader from './components/Loader';
 import ZoomControls from './components/ZoomControls';
 import FilterControl from './components/FilterControl';
+import Gallery from './components/Gallery';
 
 // Icons
 import MagicEditorIcon from './components/icons/MagicEditorIcon';
 import FilterIcon from './components/icons/FilterIcon';
 import CropIcon from './components/icons/CropIcon';
-import PhotoCombinerIcon from './components/icons/PhotoCombinerIcon';
+import SparklesIcon from './components/icons/SparklesIcon';
 import BackgroundRemoverIcon from './components/icons/BackgroundRemoverIcon';
 import BackgroundChangerIcon from './components/icons/BackgroundChangerIcon';
 import ClothChangerIcon from './components/icons/ClothChangerIcon';
@@ -71,7 +73,7 @@ import StraightenIcon from './components/icons/StraightenIcon';
 
 // Hooks, Services, Types, Constants
 import { useHistory } from './hooks/useHistory';
-import { editImage } from './services/geminiService';
+import { editImage, removeBackground } from './services/geminiService';
 import { ImageData, ImageFilters, ImageState, AiTool, ApiFilterAction, ApiAdjustmentAction } from './types';
 import { EDIT_MODES, INITIAL_FILTERS, API_FILTERS, API_ADJUSTMENTS } from './constants';
 
@@ -80,7 +82,7 @@ type ActiveTab = 'ai' | 'edits' | 'filters' | 'crop';
 // Icon Mappings outside component for performance
 const aiToolIcons: { [key: string]: ComponentType<{ className?: string }> } = {
   'magic-editor': MagicEditorIcon,
-  'photo-combiner': PhotoCombinerIcon,
+  'photo-combiner': SparklesIcon,
   'background-remover': BackgroundRemoverIcon,
   'background-changer': BackgroundChangerIcon,
   'cloth-changer': ClothChangerIcon,
@@ -142,8 +144,17 @@ const ASPECT_RATIOS = [
     { name: '9:16', value: 9 / 16 },
 ];
 
+const TABS: { id: ActiveTab; label: string; icon: ComponentType<{ className?: string }> }[] = [
+    { id: 'ai', label: 'AI Edits', icon: MagicEditorIcon },
+    { id: 'edits', label: 'Adjust', icon: SlidersIcon },
+    { id: 'filters', label: 'Filters', icon: FilterIcon },
+    { id: 'crop', label: 'Crop', icon: CropIcon },
+];
 
 const App: React.FC = () => {
+  const [galleryImages, setGalleryImages] = useState<ImageData[]>([]);
+  const [activeImageIndex, setActiveImageIndex] = useState<number | null>(null);
+
   const {
     state: imageState,
     setState: setImageState,
@@ -162,7 +173,8 @@ const App: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('ai');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('ai'); // For desktop and mobile panel content
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [zoom, setZoom] = useState(1);
   const [crop, setCrop] = useState<Crop>();
@@ -170,12 +182,10 @@ const App: React.FC = () => {
   const [aspect, setAspect] = useState<number | undefined>();
   const [selectedAiTool, setSelectedAiTool] = useState<AiTool | null>(null);
   const [secondaryImage, setSecondaryImage] = useState<ImageData | null>(null);
-  const [isTyping, setIsTyping] = useState(false);
+  const [isSelectingSecondaryImage, setIsSelectingSecondaryImage] = useState(false);
 
   const imgRef = useRef<HTMLImageElement>(null);
-  const secondaryImageInputRef = useRef<HTMLInputElement>(null);
-  const newImageInputRef = useRef<HTMLInputElement>(null);
-
+  const galleryImageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -273,67 +283,163 @@ const App: React.FC = () => {
                 ctx.fillRect(-w/2, -h/2, w, h);
             }
             
-            canvas.toBlob((blob) => {
-                if (!blob) return reject(new Error("Canvas to Blob conversion failed"));
+            // FIX: Explicitly type `blob` as `Blob | null` to fix errors from it being inferred as `unknown`.
+            canvas.toBlob((blob: Blob | null) => {
+                if (!blob) {
+                    return reject(new Error("Canvas to Blob conversion failed"));
+                }
                 const reader = new FileReader();
                 reader.onload = () => {
                     const base64 = (reader.result as string).split(',')[1];
+                    // FIX: Hardcode mimeType to 'image/png' as we requested that from `toBlob`,
+                    // which avoids an error from trying to access `blob.type` on an unknown type.
                     resolve({ base64, mimeType: 'image/png' });
                 };
-                reader.onerror = reject;
+                reader.onerror = () => reject(new Error("File reader failed during image baking"));
                 reader.readAsDataURL(blob);
             }, 'image/png');
         };
-        image.onerror = reject;
+        image.onerror = () => reject(new Error("Image failed to load for baking"));
         image.src = `data:${sourceImageData.mimeType};base64,${sourceImageData.base64}`;
     });
 }, [getCssFilterString]);
 
   // Handlers
-  const handleImageUpload = useCallback(
-    (newImageData: ImageData) => {
+  const handleImagesUpload = useCallback(
+    (newImages: ImageData[]) => {
+      if (newImages.length === 0) return;
+
+      const wasEmpty = galleryImages.length === 0;
+      const firstNewImageIndex = galleryImages.length;
+      setGalleryImages(prev => [...prev, ...newImages]);
+
+      if (wasEmpty) {
+        setActiveImageIndex(firstNewImageIndex);
+        resetImageState({
+          imageData: newImages[0],
+          filters: INITIAL_FILTERS,
+          rotation: 0,
+          straightenAngle: 0,
+        });
+        setZoom(1);
+        setError(null);
+        setActiveTab('ai');
+        setMobilePanelOpen(false);
+        setSecondaryImage(null);
+        setSelectedAiTool(null);
+        setPrompt('');
+      }
+    },
+    [galleryImages.length, resetImageState]
+  );
+
+  const handleAddMoreImages = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files.length > 0) {
+      const files = event.target.files;
+      const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+      if (imageFiles.length === 0) return;
+
+      const promises = imageFiles.map(file => {
+        return new Promise<ImageData>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result === 'string') {
+              const base64 = reader.result.split(',')[1];
+              resolve({ base64, mimeType: file.type });
+            } else {
+              reject(new Error('Failed to read file.'));
+            }
+          };
+          reader.onerror = () => reject(new Error('Failed to read file.'));
+          reader.readAsDataURL(file);
+        });
+      });
+
+      Promise.all(promises).then(imageDataArray => {
+        handleImagesUpload(imageDataArray);
+      }).catch(error => {
+        console.error("Error reading files:", error);
+        alert("There was an error processing some of your images.");
+      });
+      event.target.value = '';
+    }
+  };
+  
+  const handleSelectImage = useCallback((index: number) => {
+    if (isSelectingSecondaryImage) {
+      if (index === activeImageIndex) return; 
+      setSecondaryImage(galleryImages[index]);
+      setIsSelectingSecondaryImage(false);
+    } else {
+      if (index === activeImageIndex) return;
+      setActiveImageIndex(index);
       resetImageState({
-        imageData: newImageData,
+        imageData: galleryImages[index],
         filters: INITIAL_FILTERS,
         rotation: 0,
         straightenAngle: 0,
       });
-      setZoom(1);
-      setError(null);
-      setActiveTab('ai');
       setSecondaryImage(null);
-      setSelectedAiTool(null);
-      setPrompt('');
-    },
-    [resetImageState]
-  );
+      if (selectedAiTool?.id === 'photo-combiner') {
+        setSelectedAiTool(null);
+        setPrompt('');
+      }
+    }
+  }, [galleryImages, activeImageIndex, resetImageState, isSelectingSecondaryImage, selectedAiTool]);
+
+  const handleDeleteImage = useCallback((indexToDelete: number) => {
+    const newGallery = galleryImages.filter((_, index) => index !== indexToDelete);
+    setGalleryImages(newGallery);
+    
+    if (activeImageIndex === null) return;
+
+    if (indexToDelete === activeImageIndex) {
+      if (newGallery.length === 0) {
+        setActiveImageIndex(null);
+        resetImageState({ imageData: null, filters: INITIAL_FILTERS, rotation: 0, straightenAngle: 0 });
+      } else {
+        const newIndex = Math.max(0, indexToDelete - 1);
+        setActiveImageIndex(newIndex);
+        resetImageState({ 
+            imageData: newGallery[newIndex],
+            filters: INITIAL_FILTERS,
+            rotation: 0,
+            straightenAngle: 0 
+        });
+      }
+    } else if (indexToDelete < activeImageIndex) {
+      setActiveImageIndex(prev => (prev !== null ? prev - 1 : null));
+    }
+  }, [activeImageIndex, galleryImages, resetImageState]);
 
   const handlePromptBasedSubmit = useCallback(
     async (finalPrompt: string) => {
       if (!imageData) return;
 
-      const imagesToProcess: ImageData[] = [];
-      const baseImage = await getBakedImage(imageData, filters, rotation, straightenAngle);
-      imagesToProcess.push(baseImage);
-
-      if (selectedAiTool?.id === 'photo-combiner') {
-        if (!secondaryImage) {
-          setError("Please upload a second image for the combiner tool.");
-          setTimeout(() => setError(null), 5000);
-          return;
-        }
-        imagesToProcess.push(secondaryImage);
-      }
-
       setIsLoading(true);
       setError(null);
+
       try {
-        const newImageData = await editImage(imagesToProcess, finalPrompt);
+        const baseImage = await getBakedImage(imageData, filters, rotation, straightenAngle);
+        let newImageData: ImageData;
+
+        if (selectedAiTool?.id === 'background-remover') {
+          newImageData = await removeBackground(baseImage);
+        } else {
+          const imagesToProcess: ImageData[] = [baseImage];
+          if (selectedAiTool?.id === 'photo-combiner') {
+            if (!secondaryImage) {
+              throw new Error("Please select a second image from the gallery.");
+            }
+            imagesToProcess.push(secondaryImage);
+          }
+          newImageData = await editImage(imagesToProcess, finalPrompt);
+        }
+        
         setImageState({ imageData: newImageData, filters: INITIAL_FILTERS, rotation: 0, straightenAngle: 0 });
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'An unknown error occurred.'
-        );
+        const message = err instanceof Error ? err.message : 'An unknown error occurred.';
+        setError(message);
         setTimeout(() => setError(null), 5000);
       } finally {
         setIsLoading(false);
@@ -365,8 +471,13 @@ const App: React.FC = () => {
   const handleAiToolSelect = useCallback((tool: AiTool) => {
     setSelectedAiTool(tool);
     setPrompt(tool.defaultPrompt);
-    if (tool.id !== 'photo-combiner') {
-      setSecondaryImage(null);
+    setIsSelectingSecondaryImage(false);
+    
+    if (tool.id === 'photo-combiner') {
+        setSecondaryImage(null);
+        setIsSelectingSecondaryImage(true);
+    } else {
+        setSecondaryImage(null);
     }
   }, []);
 
@@ -406,38 +517,6 @@ const App: React.FC = () => {
     [imageState, filters, setImageState]
   );
   
-  const handleSecondaryImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      const file = event.target.files[0];
-       if (file && file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = () => {
-            if (typeof reader.result === 'string') {
-            const base64 = reader.result.split(',')[1];
-            setSecondaryImage({ base64, mimeType: file.type });
-            }
-        };
-        reader.readAsDataURL(file);
-      }
-    }
-  };
-  
-    const handleNewImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      const file = event.target.files[0];
-      if (file && file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (typeof reader.result === 'string') {
-            const base64 = reader.result.split(',')[1];
-            handleImageUpload({ base64, mimeType: file.type });
-          }
-        };
-        reader.readAsDataURL(file);
-      }
-    }
-  };
-
   const handleApplyCrop = useCallback(async () => {
     if (!completedCrop || !imageData) return;
     
@@ -466,13 +545,17 @@ const App: React.FC = () => {
             canvas.height
         );
         
-        canvas.toBlob((blob) => {
-            if (!blob) return;
+        // FIX: Explicitly type the 'blob' parameter as 'Blob | null' to fix type errors
+        // where it was inferred as 'unknown', and hardcode the mimeType to 'image/png'.
+        canvas.toBlob((blob: Blob | null) => {
+            if (!blob) {
+                return;
+            }
             const reader = new FileReader();
             reader.onload = () => {
                 const base64 = (reader.result as string).split(',')[1];
                 setImageState({ 
-                    imageData: { base64, mimeType: blob.type }, 
+                    imageData: { base64, mimeType: 'image/png' }, 
                     filters, // Keep filters
                     rotation: 0,
                     straightenAngle: 0,
@@ -586,41 +669,27 @@ const vignetteStyle = useMemo((): React.CSSProperties => {
     };
 }, [filters.vignette]);
 
-  // Render logic
-  const TabButton = ({
-    tab,
-    icon: Icon,
-    label,
-  }: {
-    tab: ActiveTab;
-    icon: ComponentType<{ className?: string }>;
-    label: string;
-  }) => (
-    <button
-      onClick={() => {
-        setActiveTab(tab);
-        if(tab === 'crop' && imgRef.current) {
-            const { naturalWidth, naturalHeight } = imgRef.current;
-            const newCrop = centerCrop(
-                makeAspectCrop({ unit: '%', width: 90 }, aspect || naturalWidth / naturalHeight, naturalWidth, naturalHeight),
-                naturalWidth,
-                naturalHeight
-            );
-            setCrop(newCrop);
-        }
-      }}
-      className={`flex-1 p-3 flex flex-col items-center justify-center text-xs transition-colors ${
-        activeTab === tab
-          ? 'bg-gray-700 text-blue-400'
-          : 'text-gray-400 hover:bg-gray-700/50'
-      }`}
-    >
-      <Icon className="w-6 h-6 mb-1" />
-      {label}
-    </button>
-  );
+  const handleMobileTabClick = (tabId: ActiveTab) => {
+    if (activeTab === tabId && mobilePanelOpen) {
+        setMobilePanelOpen(false);
+    } else {
+        setActiveTab(tabId);
+        setMobilePanelOpen(true);
+    }
 
-  const renderSidebarContent = () => {
+    if(tabId === 'crop' && imgRef.current) {
+        const { naturalWidth, naturalHeight } = imgRef.current;
+        const newCrop = centerCrop(
+            makeAspectCrop({ unit: '%', width: 90 }, aspect || naturalWidth / naturalHeight, naturalWidth, naturalHeight),
+            naturalWidth,
+            naturalHeight
+        );
+        setCrop(newCrop);
+    }
+  };
+
+
+  const renderSidebarContent = (currentTab: ActiveTab) => {
     if (!imageData)
       return (
         <div className="p-4 text-center text-gray-400">
@@ -628,7 +697,7 @@ const vignetteStyle = useMemo((): React.CSSProperties => {
         </div>
       );
 
-    switch (activeTab) {
+    switch (currentTab) {
       case 'ai':
         return (
           <div className="p-4">
@@ -658,36 +727,32 @@ const vignetteStyle = useMemo((): React.CSSProperties => {
               })}
             </div>
                 <>
-                    {selectedAiTool?.id === 'photo-combiner' && (
+                  {selectedAiTool?.id === 'photo-combiner' && (
                     <div className="mb-4">
-                        <h4 className="text-sm font-semibold text-gray-300 mb-2">Second Image</h4>
-                        {secondaryImage ? (
-                        <div className="relative w-full aspect-video rounded-lg overflow-hidden">
-                            <img src={`data:${secondaryImage.mimeType};base64,${secondaryImage.base64}`} className="w-full h-full object-cover"/>
-                            <button onClick={() => setSecondaryImage(null)} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5 hover:bg-black/80 transition-colors">
-                            <XCircleIcon className="w-5 h-5" />
-                            </button>
+                      <h4 className="text-sm font-semibold text-gray-300 mb-2">Second Image</h4>
+                      {isSelectingSecondaryImage && !secondaryImage && (
+                        <div className="p-4 border-2 border-dashed border-yellow-500 rounded-lg text-yellow-300 text-sm text-center">
+                          Please select the second image from your gallery below.
                         </div>
-                        ) : (
-                        <>
-                            <input ref={secondaryImageInputRef} type="file" className="hidden" onChange={handleSecondaryImageUpload} accept="image/*"/>
-                            <button onClick={() => secondaryImageInputRef.current?.click()} className="w-full p-4 border-2 border-dashed border-gray-600 hover:border-gray-500 rounded-lg text-gray-400 text-sm transition-colors">
-                                Click to upload
-                            </button>
-                        </>
-                        )}
+                      )}
+                      {secondaryImage && (
+                        <div className="relative w-full aspect-video rounded-lg overflow-hidden">
+                          <img src={`data:${secondaryImage.mimeType};base64,${secondaryImage.base64}`} className="w-full h-full object-cover"/>
+                          <button onClick={() => { setSecondaryImage(null); setIsSelectingSecondaryImage(true); }} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5 hover:bg-black/80 transition-colors">
+                            <XCircleIcon className="w-5 h-5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    )}
+                  )}
                     
                     <form onSubmit={handleCustomPromptSubmit} className="space-y-3">
                     <textarea
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}
-                        onFocus={() => setIsTyping(true)}
-                        onBlur={() => setIsTyping(false)}
                         placeholder="Select a tool or describe your edit..."
                         className="w-full h-24 p-2 bg-gray-900 border border-gray-600 rounded-md text-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition"
-                        disabled={!selectedAiTool}
+                        disabled={!selectedAiTool || selectedAiTool.id === 'background-remover'}
                     />
                     <button
                         type="submit"
@@ -840,102 +905,56 @@ const vignetteStyle = useMemo((): React.CSSProperties => {
     }
   };
 
-  return (
-    <div className="bg-gray-900 text-gray-100 flex flex-col lg:flex-row h-screen font-sans antialiased">
-      {isLoading && <Loader />}
-      <input ref={newImageInputRef} type="file" className="hidden" onChange={handleNewImageSelect} accept="image/*" />
-
-      <aside className="basis-2/5 lg:basis-2/5 xl:basis-auto w-full lg:w-96 bg-gray-800 flex flex-col shadow-2xl flex-shrink-0 order-last lg:order-first min-h-0">
-        <div className={`p-2 border-b border-gray-700 ${isTyping ? 'hidden lg:block' : ''}`}>
-          <div className="flex items-center justify-center space-x-2">
-            <NewLogoIcon className="w-8 h-8 flex-shrink-0" />
-            <div>
-              <h1 className="text-2xl font-bold font-bitcount bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent leading-tight">
-                AI Editor
-              </h1>
-              <p className="text-[10px] text-gray-400 -mt-1">Powered by Google</p>
-            </div>
-          </div>
+  const mainContent = (isMobile: boolean) => (
+    <>
+      {error && (
+        <div className="absolute top-4 right-4 bg-red-600 text-white p-3 rounded-md shadow-lg z-50 animate-pulse">
+          {error}
         </div>
-        <div className="flex-grow overflow-y-auto">
-          {imageData && (
-            <div className="flex border-b border-gray-700">
-              <TabButton tab="ai" icon={MagicEditorIcon} label="AI Edits" />
-              <TabButton tab="edits" icon={SlidersIcon} label="Adjust" />
-              <TabButton tab="filters" icon={FilterIcon} label="Filters" />
-              <TabButton tab="crop" icon={CropIcon} label="Crop & Rotate" />
+      )}
+      {imageData ? (
+        <div className="relative w-full h-full flex items-center justify-center">
+            <div className="relative" style={{ transform: `scale(${zoom})` }}>
+              <div style={{ transform: `rotate(${rotation + straightenAngle}deg)` }}>
+                {activeTab === 'crop' && (isMobile ? mobilePanelOpen : true) ? (
+                    <ReactCrop
+                        crop={crop}
+                        onChange={(_, percentCrop) => setCrop(percentCrop)}
+                        onComplete={(c) => setCompletedCrop(c)}
+                        aspect={aspect}
+                    >
+                        <img
+                            ref={imgRef}
+                            src={`data:${imageData.mimeType};base64,${imageData.base64}`}
+                            alt="user content"
+                            className="max-w-full max-h-full object-contain shadow-2xl rounded-lg"
+                            style={{filter: imageStyle.filter}}
+                        />
+                    </ReactCrop>
+                ) : (
+                    <img
+                        ref={imgRef}
+                        src={`data:${imageData.mimeType};base64,${imageData.base64}`}
+                        alt="user content"
+                        className="max-w-full max-h-full object-contain shadow-2xl rounded-lg"
+                        style={{filter: imageStyle.filter}}
+                    />
+                )}
             </div>
-          )}
-          {renderSidebarContent()}
-        </div>
-        {imageData && (
-          <div className={`p-2 border-t border-gray-700 flex items-center justify-center space-x-2 ${isTyping ? 'hidden lg:flex' : ''}`}>
-            <button
-              onClick={undo}
-              disabled={!canUndo || isLoading}
-              className="p-3 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-700 rounded-md transition-colors"
-            >
-              <UndoIcon className="w-6 h-6" />
-            </button>
-            <button
-              onClick={redo}
-              disabled={!canRedo || isLoading}
-              className="p-3 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-700 rounded-md transition-colors"
-            >
-              <RedoIcon className="w-6 h-6" />
-            </button>
+            <div className="absolute inset-0 pointer-events-none" style={{...warmthStyle, transform: `rotate(${rotation + straightenAngle}deg)`}}></div>
+            <div className="absolute inset-0 pointer-events-none" style={{...whitePointStyle, transform: `rotate(${rotation + straightenAngle}deg)`}}></div>
+            <div className="absolute inset-0 pointer-events-none" style={{...blackPointStyle, transform: `rotate(${rotation + straightenAngle}deg)`}}></div>
+            <div className="absolute inset-0 pointer-events-none rounded-lg" style={{...vignetteStyle, transform: `rotate(${rotation + straightenAngle}deg)`}}></div>
           </div>
-        )}
-      </aside>
-
-      <main className="basis-3/5 lg:basis-3/5 xl:basis-auto flex items-center justify-center p-4 lg:p-8 overflow-hidden bg-black/20">
-        {error && (
-          <div className="absolute top-4 right-4 bg-red-600 text-white p-3 rounded-md shadow-lg z-50 animate-pulse">
-            {error}
-          </div>
-        )}
-        {imageData ? (
-          <div className="relative w-full h-full flex items-center justify-center">
-              <div className="relative" style={{ transform: `scale(${zoom})` }}>
-                <div style={{ transform: `rotate(${rotation + straightenAngle}deg)` }}>
-                  {activeTab === 'crop' ? (
-                      <ReactCrop
-                          crop={crop}
-                          onChange={(_, percentCrop) => setCrop(percentCrop)}
-                          onComplete={(c) => setCompletedCrop(c)}
-                          aspect={aspect}
-                      >
-                          <img
-                              ref={imgRef}
-                              src={`data:${imageData.mimeType};base64,${imageData.base64}`}
-                              alt="user content"
-                              className="max-w-full max-h-full object-contain shadow-2xl rounded-lg"
-                              style={{filter: imageStyle.filter}}
-                          />
-                      </ReactCrop>
-                  ) : (
-                      <img
-                          ref={imgRef}
-                          src={`data:${imageData.mimeType};base64,${imageData.base64}`}
-                          alt="user content"
-                          className="max-w-full max-h-full object-contain shadow-2xl rounded-lg"
-                          style={{filter: imageStyle.filter}}
-                      />
-                  )}
-              </div>
-              <div className="absolute inset-0 pointer-events-none" style={{...warmthStyle, transform: `rotate(${rotation + straightenAngle}deg)`}}></div>
-              <div className="absolute inset-0 pointer-events-none" style={{...whitePointStyle, transform: `rotate(${rotation + straightenAngle}deg)`}}></div>
-              <div className="absolute inset-0 pointer-events-none" style={{...blackPointStyle, transform: `rotate(${rotation + straightenAngle}deg)`}}></div>
-              <div className="absolute inset-0 pointer-events-none rounded-lg" style={{...vignetteStyle, transform: `rotate(${rotation + straightenAngle}deg)`}}></div>
-            </div>
+          {!isMobile && (
             <div className="absolute top-4 right-4 flex items-center space-x-2">
-               <button
-                  onClick={() => newImageInputRef.current?.click()}
-                  className="bg-gray-800 text-white rounded-lg px-4 py-2 hover:bg-gray-700 transition-colors shadow-lg flex items-center space-x-2"
-                  aria-label="Upload new image"
+                <button
+                onClick={() => galleryImageInputRef.current?.click()}
+                className="bg-gray-800 text-white rounded-lg px-4 py-2 hover:bg-gray-700 transition-colors shadow-lg flex items-center space-x-2"
+                aria-label="Add new images"
                 >
-                  <UploadIcon className="w-5 h-5" />
-                  <span className="text-sm font-semibold">Upload</span>
+                <UploadIcon className="w-5 h-5" />
+                <span className="text-sm font-semibold">Add Images</span>
                 </button>
                 <button
                 onClick={handleDownload}
@@ -946,30 +965,182 @@ const vignetteStyle = useMemo((): React.CSSProperties => {
                 <span className="text-sm font-semibold">Download</span>
                 </button>
             </div>
-            <ZoomControls
-              zoom={zoom}
-              onZoomIn={handleZoomIn}
-              onZoomOut={handleZoomOut}
-              onResetZoom={handleResetZoom}
-            />
+          )}
+          <ZoomControls
+            zoom={zoom}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onResetZoom={handleResetZoom}
+          />
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center w-full h-full text-center">
+          <div className="mb-8 text-center">
+            <NewLogoIcon className="w-16 h-16 mx-auto" />
+            <div className="flex items-baseline justify-center mt-4 space-x-3">
+              <h1 className="text-4xl lg:text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent font-bitcount">
+                AI Editor
+              </h1>
+            </div>
           </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center w-full h-full text-center">
-            <div className="mb-8 text-center">
-              <NewLogoIcon className="w-16 h-16 mx-auto" />
-              <div className="flex items-baseline justify-center mt-4 space-x-3">
-                <h1 className="text-4xl lg:text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent font-bitcount">
+          <div className="w-full max-w-xl h-80">
+            <ImageUploader onImagesUpload={handleImagesUpload} />
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+
+  return (
+    <div className="bg-gray-900 text-gray-100 h-screen font-sans antialiased overflow-hidden">
+      {isLoading && <Loader />}
+      <input 
+        ref={galleryImageInputRef} 
+        type="file" 
+        className="hidden" 
+        onChange={handleAddMoreImages} 
+        accept="image/*" 
+        multiple 
+      />
+    
+      {/* --- DESKTOP LAYOUT --- */}
+      <div className="hidden lg:flex h-full flex-row">
+        <aside className="w-96 bg-gray-800 flex flex-col shadow-2xl flex-shrink-0">
+          <div className="p-2 border-b border-gray-700">
+            <div className="flex items-center justify-center space-x-2">
+              <NewLogoIcon className="w-8 h-8 flex-shrink-0" />
+              <div>
+                <h1 className="text-2xl font-bold font-bitcount bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent leading-tight">
                   AI Editor
                 </h1>
-                <p className="text-gray-400 text-lg">Powered by Google</p>
               </div>
             </div>
-            <div className="w-full max-w-xl h-80">
-              <ImageUploader onImageUpload={handleImageUpload} />
-            </div>
           </div>
+          <div className="flex-grow overflow-y-auto">
+            {imageData && (
+              <div className="flex border-b border-gray-700">
+                {TABS.map(({ id, label, icon: Icon }) => (
+                    <button
+                        key={id}
+                        onClick={() => setActiveTab(id)}
+                        className={`flex-1 p-3 flex flex-col items-center justify-center text-xs transition-colors ${
+                        activeTab === id
+                            ? 'bg-gray-700 text-blue-400'
+                            : 'text-gray-400 hover:bg-gray-700/50'
+                        }`}
+                    >
+                        <Icon className="w-6 h-6 mb-1" />
+                        {label}
+                    </button>
+                ))}
+              </div>
+            )}
+            {renderSidebarContent(activeTab)}
+          </div>
+          {imageData && (
+            <div className="p-2 border-t border-gray-700 flex items-center justify-center space-x-2">
+              <button
+                onClick={undo}
+                disabled={!canUndo || isLoading}
+                className="p-3 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-700 rounded-md transition-colors"
+                aria-label="Undo"
+              >
+                <UndoIcon className="w-6 h-6" />
+              </button>
+              <button
+                onClick={redo}
+                disabled={!canRedo || isLoading}
+                className="p-3 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-700 rounded-md transition-colors"
+                aria-label="Redo"
+              >
+                <RedoIcon className="w-6 h-6" />
+              </button>
+            </div>
+          )}
+        </aside>
+        <div className="flex-1 flex flex-col min-h-0">
+            <main className="flex-1 flex items-center justify-center p-8 overflow-hidden bg-black/20 relative">
+                {mainContent(false)}
+            </main>
+            {galleryImages.length > 0 && <Gallery 
+              images={galleryImages}
+              activeIndex={activeImageIndex}
+              onSelect={handleSelectImage}
+              onDelete={handleDeleteImage}
+              onAddClick={() => galleryImageInputRef.current?.click()}
+              isSelectingSecondary={isSelectingSecondaryImage}
+            />}
+        </div>
+      </div>
+
+      {/* --- MOBILE LAYOUT --- */}
+      <div className="lg:hidden flex flex-col h-full">
+        <header className="p-2 bg-gray-800 border-b border-gray-700 flex justify-between items-center flex-shrink-0 z-20">
+            <div className="flex items-center space-x-2">
+              <NewLogoIcon className="w-8 h-8 flex-shrink-0" />
+              <h1 className="text-xl font-bold font-bitcount bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent leading-tight">
+                AI Editor
+              </h1>
+            </div>
+            {imageData && (
+                <div className="flex items-center space-x-1">
+                    <button onClick={undo} disabled={!canUndo || isLoading} className="p-2 disabled:opacity-30"><UndoIcon className="w-5 h-5"/></button>
+                    <button onClick={redo} disabled={!canRedo || isLoading} className="p-2 disabled:opacity-30"><RedoIcon className="w-5 h-5"/></button>
+                    <button onClick={handleDownload} className="p-2"><DownloadIcon className="w-5 h-5"/></button>
+                </div>
+            )}
+        </header>
+
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Top part: Image and Gallery */}
+          <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+            <main className="flex-1 flex items-center justify-center p-2 relative">
+                {mainContent(true)}
+            </main>
+            {galleryImages.length > 0 && <Gallery 
+              images={galleryImages}
+              activeIndex={activeImageIndex}
+              onSelect={handleSelectImage}
+              onDelete={handleDeleteImage}
+              onAddClick={() => galleryImageInputRef.current?.click()}
+              isSelectingSecondary={isSelectingSecondaryImage}
+            />}
+          </div>
+          
+          {/* Bottom part: The Tools Panel */}
+          {imageData && (
+            <div className={`transition-all duration-300 ease-in-out bg-gray-800 rounded-t-2xl flex flex-col overflow-hidden ${mobilePanelOpen ? 'max-h-[50%]' : 'max-h-0'}`}>
+                <div className="p-4 text-center cursor-pointer" onClick={() => setMobilePanelOpen(false)}>
+                    <div className="w-10 h-1.5 bg-gray-600 rounded-full mx-auto"></div>
+                </div>
+                <div className="overflow-y-auto px-1 flex-1">
+                    {renderSidebarContent(activeTab)}
+                </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Footer Nav */}
+        {imageData && (
+            <footer className="h-16 flex-shrink-0 bg-gray-900/80 backdrop-blur-sm border-t border-gray-700 flex justify-around items-center z-20" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0)'}}>
+                {TABS.map(({ id, label, icon: Icon }) => (
+                     <button
+                        key={id}
+                        onClick={() => handleMobileTabClick(id)}
+                        className={`flex-1 p-2 h-full flex flex-col items-center justify-center text-xs transition-colors ${
+                        mobilePanelOpen && activeTab === id
+                            ? 'text-blue-400'
+                            : 'text-gray-400'
+                        }`}
+                    >
+                        <Icon className="w-6 h-6 mb-1" />
+                        {label.split(' ')[0]}
+                    </button>
+                ))}
+            </footer>
         )}
-      </main>
+      </div>
     </div>
   );
 };
